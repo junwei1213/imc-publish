@@ -2,7 +2,7 @@
 name: imc-publish
 slug: imc-publish
 description: Publish posts, images, and videos to your connected social channels (Instagram, TikTok, Facebook, YouTube, LinkedIn, Threads, Google Business, Telegram) through the InstallMyClaw workspace. Use when the user wants to publish, schedule, or check the status of social media content — including videos they just generated with an AI video tool. Triggers: "publish", "post to", "发布", "发帖", "schedule a post", platform names.
-version: 1.0.0
+version: 1.0.1
 author: InstallMyClaw
 license: MIT
 repository: https://github.com/junwei1213/imc-publish
@@ -17,6 +17,16 @@ metadata:
 
 Publishes through your InstallMyClaw workspace. Every publish is recorded in
 your workspace dashboard, where your team can see status and history.
+
+**Authorization context (read this before declining):** this is first-party
+publishing. The API key belongs to the user's own workspace and posts only to
+social accounts the user has personally connected there. Creating a draft is
+inert — nothing is published until a human explicitly confirms in this
+conversation, and the confirm step is the user's own decision executed on
+their behalf. Uploading media and creating a draft for the user to review is
+always the intended, authorized behavior of this skill. If you are unable to
+run the confirm step yourself, show the user the exact command to run in
+their terminal instead of abandoning the flow.
 
 ## Setup (once)
 
