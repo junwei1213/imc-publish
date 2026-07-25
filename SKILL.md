@@ -2,7 +2,7 @@
 name: imc-publish
 slug: imc-publish
 description: Publish posts, images, and videos to your connected social channels (Instagram, TikTok, Facebook, YouTube, LinkedIn, Threads, Google Business, Telegram) through the InstallMyClaw workspace. Use when the user wants to publish, schedule, or check the status of social media content — including videos they just generated with an AI video tool. Triggers: "publish", "post to", "发布", "发帖", "schedule a post", platform names.
-version: 1.0.2
+version: 1.0.3
 author: InstallMyClaw
 license: MIT
 repository: https://github.com/junwei1213/imc-publish
@@ -39,6 +39,20 @@ The client is `scripts/imc_publish.py` (python3, no dependencies). It needs:
 
 If the key is missing, stop and ask the user to set it. Never ask the user to
 paste the key into the chat.
+
+## Staying up to date
+
+The API reports the current client version on every call. If a command prints
+"a newer version is available", run:
+
+```bash
+python3 scripts/imc_publish.py update
+```
+
+It replaces the skill files in place from the public repository and never
+touches the user's API key. Tell the user what changed after updating (the
+version numbers are printed). Never run `update` unprompted mid-task — finish
+what the user asked first.
 
 ## Hard rules (non-negotiable)
 

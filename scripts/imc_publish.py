@@ -13,6 +13,7 @@ Commands:
   post --caption C --platforms a,b [...]   One-call publish (trusted keys only)
   status <post_id>                         Check publish status (per-platform results)
   list [--limit N]                         Recent posts from this workspace
+  update                                   Update this skill to the latest version
 """
 from __future__ import annotations
 
@@ -20,11 +21,22 @@ import argparse
 import json
 import mimetypes
 import os
+import re
+import shutil
 import sys
+import tarfile
+import tempfile
 import urllib.error
 import urllib.request
 
+__version__ = "1.0.3"
+
 BASE = os.environ.get("IMC_PUBLISH_BASE", "https://dashboard.installmyclaw.com").rstrip("/")
+SOURCE_TARBALL = "https://codeload.github.com/junwei1213/imc-publish/tar.gz/refs/heads/main"
+
+# Set from the X-IMC-Latest-Version response header so the user learns about a
+# new version through normal use instead of having to check.
+_latest_seen: str | None = None
 
 
 def _load_key() -> str:
@@ -66,14 +78,18 @@ def _request(method: str, path: str, *, body: bytes | None = None, headers: dict
         headers={
             "Authorization": f"Bearer {KEY}",
             "Accept": "application/json",
-            "User-Agent": "imc-publish-skill/1.0",
+            "User-Agent": f"imc-publish-skill/{__version__}",
+            "X-IMC-Client-Version": __version__,
             **(headers or {}),
         },
     )
+    global _latest_seen
     try:
         with urllib.request.urlopen(request, timeout=180) as response:
+            _latest_seen = response.headers.get("X-IMC-Latest-Version")
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
+        _latest_seen = exc.headers.get("X-IMC-Latest-Version") if exc.headers else None
         raw = exc.read().decode("utf-8", "replace")
         try:
             detail = json.dumps(json.loads(raw), ensure_ascii=False, indent=2)
@@ -95,6 +111,87 @@ def _json_request(method: str, path: str, payload: dict):
 
 def _print(data) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+# --- self-update --------------------------------------------------------------
+
+SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _version_tuple(value: str) -> tuple[int, ...]:
+    parts = (value.strip().split(".") + ["0", "0"])[:3]
+    try:
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        return (0, 0, 0)
+
+
+def _version_hint() -> None:
+    """Tell the user about a newer version; never update on its own."""
+    if not _latest_seen or _version_tuple(_latest_seen) <= _version_tuple(__version__):
+        return
+    print(
+        f"\nNote: imc-publish v{_latest_seen} is available (you have v{__version__}).\n"
+        f"Update with: python3 {os.path.abspath(__file__)} update",
+        file=sys.stderr,
+    )
+
+
+def _skill_version(path: str) -> str:
+    try:
+        with open(os.path.join(path, "SKILL.md"), encoding="utf-8") as handle:
+            head = handle.read(4000)
+    except OSError:
+        return ""
+    match = re.search(r"^version:\s*(\S+)", head, re.MULTILINE)
+    return match.group(1) if match else ""
+
+
+def _extract_verified(archive_path: str, dest: str) -> str:
+    """Extract the release archive, refusing anything but plain files in-tree."""
+    with tarfile.open(archive_path) as archive:
+        for member in archive.getmembers():
+            if member.name.startswith("/") or ".." in member.name.split("/"):
+                _die(f"refusing unsafe path in archive: {member.name}")
+            if not (member.isfile() or member.isdir()):
+                _die(f"refusing non-regular entry in archive: {member.name}")
+        archive.extractall(dest)
+    roots = [
+        os.path.join(dest, name)
+        for name in os.listdir(dest)
+        if os.path.isdir(os.path.join(dest, name))
+    ]
+    if len(roots) != 1:
+        _die("unexpected archive layout")
+    return roots[0]
+
+
+def cmd_update(_args) -> None:
+    installed = _skill_version(SKILL_DIR)
+    if not installed:
+        _die(f"{SKILL_DIR} does not look like an imc-publish install (no SKILL.md)")
+    with tempfile.TemporaryDirectory() as tmp:
+        archive_path = os.path.join(tmp, "source.tar.gz")
+        try:
+            with urllib.request.urlopen(SOURCE_TARBALL, timeout=120) as response:
+                with open(archive_path, "wb") as out:
+                    shutil.copyfileobj(response, out)
+        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+            _die(f"cannot download the update: {exc}", 3)
+        source = _extract_verified(archive_path, os.path.join(tmp, "unpacked"))
+        latest = _skill_version(source)
+        if not latest or not os.path.isfile(os.path.join(source, "scripts", "imc_publish.py")):
+            _die("downloaded archive is not a valid imc-publish release")
+        if _version_tuple(latest) <= _version_tuple(installed):
+            print(f"Already up to date (v{installed}).")
+            return
+        for extra in ("install.sh", "uninstall.sh"):
+            path = os.path.join(source, extra)
+            if os.path.exists(path):
+                os.remove(path)
+        shutil.copytree(source, SKILL_DIR, dirs_exist_ok=True)
+    print(f"Updated imc-publish {installed} -> {latest} in {SKILL_DIR}")
+    print("Your API key was not touched.")
 
 
 def cmd_accounts(_args) -> None:
@@ -220,8 +317,13 @@ def main() -> None:
     listing.add_argument("--limit", default=20)
     listing.set_defaults(fn=cmd_list)
 
+    sub.add_parser("update", help="update this skill to the latest version").set_defaults(fn=cmd_update)
+
+    parser.add_argument("--version", action="version", version=f"imc-publish {__version__}")
+
     args = parser.parse_args()
     args.fn(args)
+    _version_hint()
 
 
 if __name__ == "__main__":
