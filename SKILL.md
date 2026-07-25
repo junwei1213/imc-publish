@@ -54,6 +54,10 @@ touches the user's API key. Tell the user what changed after updating (the
 version numbers are printed). Never run `update` unprompted mid-task — finish
 what the user asked first.
 
+**If this skill was installed on an OpenClaw agent from ClawHub**, use the
+platform's own updater instead — `openclaw skills update` — so the install
+stays managed.
+
 ## Hard rules (non-negotiable)
 
 1. **Never publish without the user's explicit confirmation in this
