@@ -17,11 +17,24 @@ it to the user.
 
 ## Media
 
-- Images: jpg / png / webp / gif. Videos: mp4. Max 100MB per file.
+- Images: jpg / png / webp / gif. Videos: mp4.
 - Media must be uploaded via the `upload` command first — the API only accepts
   its own hosted URLs.
 - Identical files dedupe to the same URL (content-addressed) — re-uploading is
   harmless.
+
+### Current size limit (important)
+
+`upload` accepts files up to 100MB, but the publishing channel currently caps
+each file at **about 1MB**. Anything larger is accepted by `upload` and then
+rejected at draft time with a 413 explaining the limit.
+
+In practice this means **video publishing is not available through this API
+right now** — a usable mp4 is far over 1MB. If the user wants to publish a
+video, don't burn their time uploading it: tell them video publishing goes
+through their workspace's managed publishing (ask their InstallMyClaw contact),
+and use this API for text and small images in the meantime. This limit is
+expected to be raised; check by publishing a >1MB image if unsure.
 
 ## Scheduling
 
