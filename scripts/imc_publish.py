@@ -29,7 +29,7 @@ import tempfile
 import urllib.error
 import urllib.request
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 BASE = os.environ.get("IMC_PUBLISH_BASE", "https://dashboard.installmyclaw.com").rstrip("/")
 SOURCE_TARBALL = "https://codeload.github.com/junwei1213/imc-publish/tar.gz/refs/heads/main"
