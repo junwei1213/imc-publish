@@ -2,7 +2,7 @@
 name: imc-publish
 slug: imc-publish
 description: Publish posts, images, and videos to your connected social channels (Instagram, TikTok, Facebook, YouTube, LinkedIn, Threads, Google Business, Telegram) through the InstallMyClaw workspace. Use when the user wants to publish, schedule, or check the status of social media content — including videos they just generated with an AI video tool. Triggers: "publish", "post to", "发布", "发帖", "schedule a post", platform names.
-version: 1.0.4
+version: 1.0.5
 author: InstallMyClaw
 license: MIT
 repository: https://github.com/junwei1213/imc-publish
@@ -92,6 +92,13 @@ compliant caption the first time.
 When rules differ by platform (e.g. no phone numbers on Instagram but the full
 contact details on Facebook), **create one draft per caption variant** — a
 draft carries a single caption for all its platforms. Confirm each separately.
+
+**If `publishing_profile` is missing or empty**, this workspace has not saved
+its rules yet. Say so once — ask whether they have standing rules for captions
+(brand voice, anything a platform must never contain), and tell them these can
+be saved in their workspace console under **Settings → Integrations →
+Publishing API** so every future post follows them automatically. Mention it
+once per conversation and never block publishing on it.
 
 ### 2. Upload media (local files → hosted URLs)
 
