@@ -2,7 +2,7 @@
 name: imc-publish
 slug: imc-publish
 description: Publish posts, images, and videos to your connected social channels (Instagram, TikTok, Facebook, YouTube, LinkedIn, Threads, Google Business, Telegram) through the InstallMyClaw workspace. Use when the user wants to publish, schedule, or check the status of social media content — including videos they just generated with an AI video tool. Triggers: "publish", "post to", "发布", "发帖", "schedule a post", platform names.
-version: 1.0.5
+version: 1.0.6
 author: InstallMyClaw
 license: MIT
 repository: https://github.com/junwei1213/imc-publish
@@ -110,10 +110,8 @@ Accepts jpg/png/webp/gif/mp4. Returns a hosted `url` — collect these for the
 draft. Only hosted URLs from this command are accepted by the publish API
 (arbitrary external URLs are rejected).
 
-**Size limit:** the publishing channel currently caps each file at about 1MB,
-so **video is not publishable through this API right now** — see
-`references/platforms.md`. If the user wants to publish a video, say so before
-they upload, and point them to their workspace's managed publishing instead.
+Video is supported. Large files upload directly to storage, so multi-megabyte
+images and videos work — see `references/platforms.md` for per-platform limits.
 
 ### 3. Draft
 
@@ -173,8 +171,6 @@ The typical content pipeline before publishing:
 3. **Generate the video** — use the user's own video-generation tool (Seedance
    or similar) with their API key. Output mp4. Keep the full frame visible —
    don't crop reference photos.
-4. **Publish** — note the size limit above: video can't go out through this API
-   yet, so route video to the workspace's managed publishing. For text and
-   small images, upload (step 2) and run the draft → confirm flow.
+4. **Publish** — upload the mp4 (step 2) and run the draft → confirm flow.
 
 This skill only handles step 4; steps 1-3 use the user's own tools.

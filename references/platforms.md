@@ -23,18 +23,15 @@ it to the user.
 - Identical files dedupe to the same URL (content-addressed) — re-uploading is
   harmless.
 
-### Current size limit (important)
+### File size
 
-`upload` accepts files up to 100MB, but the publishing channel currently caps
-each file at **about 1MB**. Anything larger is accepted by `upload` and then
-rejected at draft time with a 413 explaining the limit.
+Large files are uploaded straight to object storage rather than through the
+API, so multi-megabyte images and videos are fine. A 3.38MB image was verified
+end-to-end on 2026-08-05. `upload` accepts up to 100MB.
 
-In practice this means **video publishing is not available through this API
-right now** — a usable mp4 is far over 1MB. If the user wants to publish a
-video, don't burn their time uploading it: tell them video publishing goes
-through their workspace's managed publishing (ask their InstallMyClaw contact),
-and use this API for text and small images in the meantime. This limit is
-expected to be raised; check by publishing a >1MB image if unsure.
+Per-platform limits still apply (each platform enforces its own duration,
+dimension, and size rules) — a rejection at draft time names the platform and
+the reason; relay it to the user.
 
 ## Scheduling
 
