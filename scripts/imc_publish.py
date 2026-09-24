@@ -28,11 +28,12 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"  # IMCPUB-DUPCAP-RETRY-20260924
 
 BASE = os.environ.get("IMC_PUBLISH_BASE", "https://dashboard.installmyclaw.com").rstrip("/")
 SOURCE_TARBALL = "https://codeload.github.com/junwei1213/imc-publish/tar.gz/refs/heads/main"
@@ -86,7 +87,17 @@ def _die(message: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def _request(method: str, path: str, *, body: bytes | None = None, headers: dict | None = None):
+_RETRY_HTTP_CODES = {502, 503, 504, 520, 521, 522, 523, 524}
+_RETRY_WAITS = (5, 15, 30)
+
+
+def _retry_wait(attempt: int, reason: str) -> None:
+    wait = _RETRY_WAITS[min(attempt, len(_RETRY_WAITS) - 1)]
+    print(f"publishing service unavailable ({reason}); retrying in {wait}s", file=sys.stderr)
+    time.sleep(wait)
+
+
+def _request(method: str, path: str, *, body: bytes | None = None, headers: dict | None = None, retries: int = 0):
     if not KEY:
         _die("IMC_PUBLISH_API_KEY is not set. Ask your workspace owner for a publishing key.")
     request = urllib.request.Request(
@@ -102,28 +113,37 @@ def _request(method: str, path: str, *, body: bytes | None = None, headers: dict
         },
     )
     global _latest_seen
-    try:
-        with urllib.request.urlopen(request, timeout=180) as response:
-            _latest_seen = response.headers.get("X-IMC-Latest-Version")
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        _latest_seen = exc.headers.get("X-IMC-Latest-Version") if exc.headers else None
-        raw = exc.read().decode("utf-8", "replace")
+    for attempt in range(retries + 1):
         try:
-            detail = json.dumps(json.loads(raw), ensure_ascii=False, indent=2)
-        except ValueError:
-            detail = raw[:2000]
-        _die(f"HTTP {exc.code} {path}\n{detail}", 2)
-    except urllib.error.URLError as exc:
-        _die(f"cannot reach publishing service: {exc.reason}", 3)
+            with urllib.request.urlopen(request, timeout=180) as response:
+                _latest_seen = response.headers.get("X-IMC-Latest-Version")
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            _latest_seen = exc.headers.get("X-IMC-Latest-Version") if exc.headers else None
+            raw = exc.read().decode("utf-8", "replace")
+            if attempt < retries and exc.code in _RETRY_HTTP_CODES:
+                _retry_wait(attempt, f"HTTP {exc.code}")
+                continue
+            try:
+                detail = json.dumps(json.loads(raw), ensure_ascii=False, indent=2)
+            except ValueError:
+                detail = raw[:2000]
+            _die(f"HTTP {exc.code} {path}\n{detail}", 2)
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            reason = getattr(exc, "reason", exc)
+            if attempt < retries:
+                _retry_wait(attempt, str(reason))
+                continue
+            _die(f"cannot reach publishing service: {reason}", 3)
 
 
-def _json_request(method: str, path: str, payload: dict):
+def _json_request(method: str, path: str, payload: dict, retries: int = 0):
     return _request(
         method,
         path,
         body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json"},
+        retries=retries,
     )
 
 
@@ -266,6 +286,8 @@ def cmd_upload(args) -> None:
             "/v1/publish/media",
             body=raw,
             headers={"Content-Type": mime, "X-Filename": os.path.basename(path)},
+            # Media is content-addressed, so a repeated upload is harmless.
+            retries=3,
         )
     )
 
@@ -305,12 +327,15 @@ def _draft_payload(args) -> dict:
             _die(f"--target must be JSON, got: {raw}")
     if targets:
         payload["targets"] = targets
+    if getattr(args, "allow_duplicate_caption", False):
+        payload["allow_duplicate_caption"] = True
     return payload
 
 
 def cmd_draft(args) -> None:
     payload = _draft_payload(args)
-    response = _json_request("POST", "/v1/publish/drafts", payload)
+    # An unconfirmed draft publishes nothing, so retrying one is safe.
+    response = _json_request("POST", "/v1/publish/drafts", payload, retries=2)
     _print(_require_brand_scope(response, str(payload.get("brand_id") or "")))
 
 
@@ -350,6 +375,11 @@ def _add_draft_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--schedule", help="RFC3339 UTC time, e.g. 2026-08-01T09:00:00Z")
     parser.add_argument("--language", help="content language hint, e.g. en / zh")
     parser.add_argument("--brand-id", help="override IMC_PUBLISH_BRAND_ID")
+    parser.add_argument(
+        "--allow-duplicate-caption",
+        action="store_true",
+        help="allow a caption another post already uses (e.g. several videos under one caption)",
+    )
     parser.add_argument(
         "--target",
         action="append",

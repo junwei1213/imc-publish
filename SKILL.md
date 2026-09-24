@@ -174,3 +174,24 @@ The typical content pipeline before publishing:
 4. **Publish** — upload the mp4 (step 2) and run the draft → confirm flow.
 
 This skill only handles step 4; steps 1-3 use the user's own tools.
+
+<!-- IMCPUB-DUPCAP-RETRY-20260924 -->
+## Several videos, one caption
+
+People often send two or more videos and then one caption for all of them.
+
+- **TikTok takes one video per post.** Instagram can take several videos in
+  one carousel (`--target '{"platform":"instagram","account_id":"...","platform_data":{"content_type":"carousel"}}'`),
+  or one Reel per video.
+- **Before creating any draft, say the plan in one line and ask them to confirm it**,
+  e.g. 「共 2 段视频：Instagram 发 1 篇（两段合在一起），TikTok 发 2 条，都用同一份文案，对吗？」
+  "Publish these?" answered with "yes" does not settle one-post-per-video versus
+  all-in-one.
+- When several posts will share one caption on the same account, pass
+  `--allow-duplicate-caption` on each draft after the first. Without it the
+  second post is rejected as duplicate content by the publishing service — that
+  is our own check, not the platform's, so never tell the customer "TikTok does
+  not accept repeated captions".
+- Uploads and drafts retry automatically on a gateway error; `confirm` never
+  retries. If `confirm` fails, check `list` before trying again so nothing is
+  posted twice.
