@@ -4,9 +4,11 @@
 Environment:
   IMC_PUBLISH_API_KEY   required, workspace publishing key
   IMC_PUBLISH_BASE      optional, default https://dashboard.installmyclaw.com
+  IMC_PUBLISH_BRAND_ID  recommended when a workspace has multiple Brands
 
 Commands:
   accounts                                 List connected social accounts
+  sync-accounts                            Sync accounts for one exact Brand
   upload <file>                            Upload local media, prints hosted URL
   draft --caption C --platforms a,b [...]  Create a draft, prints preview + confirm token
   confirm <draft_id> <confirm_token>       Publish a prepared draft
@@ -27,9 +29,10 @@ import sys
 import tarfile
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 
-__version__ = "1.0.6"
+__version__ = "1.2.0"
 
 BASE = os.environ.get("IMC_PUBLISH_BASE", "https://dashboard.installmyclaw.com").rstrip("/")
 SOURCE_TARBALL = "https://codeload.github.com/junwei1213/imc-publish/tar.gz/refs/heads/main"
@@ -52,6 +55,21 @@ def _load_key() -> str:
 
 
 KEY = _load_key()
+
+
+def _load_brand_id() -> str:
+    brand_id = os.environ.get("IMC_PUBLISH_BRAND_ID", "").strip()
+    if brand_id:
+        return brand_id
+    path = os.path.expanduser("~/.config/imc-publish/brand_id")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read().strip()
+    except OSError:
+        return ""
+
+
+BRAND_ID = _load_brand_id()
 
 MEDIA_MIME = {
     ".jpg": "image/jpeg",
@@ -194,8 +212,39 @@ def cmd_update(_args) -> None:
     print("Your API key was not touched.")
 
 
-def cmd_accounts(_args) -> None:
-    _print(_request("GET", "/v1/publish/accounts"))
+def _brand_id(args) -> str:
+    return str(getattr(args, "brand_id", None) or BRAND_ID or "").strip()
+
+
+def _require_brand_scope(response: object, requested_brand_id: str) -> object:
+    """Fail closed unless the API proves it honored the requested Brand."""
+    if not requested_brand_id:
+        return response
+    acknowledged = ""
+    if isinstance(response, dict):
+        acknowledged = str(response.get("brand_id") or "").strip()
+    if acknowledged != requested_brand_id:
+        _die(
+            "Publishing API did not acknowledge the requested Brand. "
+            "Refusing to continue in this multi-Brand workspace; upgrade the API first.",
+            4,
+        )
+    return response
+
+
+def cmd_accounts(args) -> None:
+    brand_id = _brand_id(args)
+    query = "?" + urllib.parse.urlencode({"brand_id": brand_id}) if brand_id else ""
+    response = _request("GET", "/v1/publish/accounts" + query)
+    _print(_require_brand_scope(response, brand_id))
+
+
+def cmd_sync_accounts(args) -> None:
+    brand_id = _brand_id(args)
+    if not brand_id:
+        _die("sync-accounts requires --brand-id or IMC_PUBLISH_BRAND_ID")
+    response = _json_request("POST", "/v1/publish/accounts/sync", {"brand_id": brand_id})
+    _print(_require_brand_scope(response, brand_id))
 
 
 def cmd_upload(args) -> None:
@@ -227,6 +276,16 @@ def _draft_payload(args) -> dict:
         "platforms": [item.strip() for item in args.platforms.split(",") if item.strip()],
         "publish_now": not args.schedule,
     }
+    mode = getattr(args, "notification_mode", "original_chat")
+    message_id = getattr(args, "source_message_id", None)
+    message_ref = getattr(args, "source_message_ref", None)
+    conversation_id = getattr(args, "source_conversation_id", None)
+    if mode == "original_chat" and not (message_id or message_ref):
+        _die("Source message is required for completion notifications. Pass --source-message-id or --source-message-ref from trusted inbound context. Use --notification-mode dashboard_only only when the user explicitly chooses no chat notification.")
+    payload["notification_mode"] = mode
+    for key, value in (("source_message_id", message_id), ("source_message_ref", message_ref), ("source_conversation_id", conversation_id)):
+        if value is not None:
+            payload[key] = value
     if args.title:
         payload["title"] = args.title
     if args.media:
@@ -235,6 +294,9 @@ def _draft_payload(args) -> dict:
         payload["scheduled_at"] = args.schedule
     if args.language:
         payload["language"] = args.language
+    brand_id = _brand_id(args)
+    if brand_id:
+        payload["brand_id"] = brand_id
     targets = []
     for raw in args.target or []:
         try:
@@ -247,7 +309,9 @@ def _draft_payload(args) -> dict:
 
 
 def cmd_draft(args) -> None:
-    _print(_json_request("POST", "/v1/publish/drafts", _draft_payload(args)))
+    payload = _draft_payload(args)
+    response = _json_request("POST", "/v1/publish/drafts", payload)
+    _print(_require_brand_scope(response, str(payload.get("brand_id") or "")))
 
 
 def cmd_confirm(args) -> None:
@@ -261,7 +325,9 @@ def cmd_confirm(args) -> None:
 
 
 def cmd_post(args) -> None:
-    _print(_json_request("POST", "/v1/publish/posts", _draft_payload(args)))
+    payload = _draft_payload(args)
+    response = _json_request("POST", "/v1/publish/posts", payload)
+    _print(_require_brand_scope(response, str(payload.get("brand_id") or "")))
 
 
 def cmd_status(args) -> None:
@@ -273,12 +339,17 @@ def cmd_list(args) -> None:
 
 
 def _add_draft_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--notification-mode", choices=["original_chat", "dashboard_only"], default="original_chat")
+    parser.add_argument("--source-message-id", type=int)
+    parser.add_argument("--source-message-ref", help="exact provider message ID from trusted inbound context")
+    parser.add_argument("--source-conversation-id", type=int)
     parser.add_argument("--caption", required=True)
     parser.add_argument("--platforms", required=True, help="comma-separated, e.g. instagram,tiktok")
     parser.add_argument("--title", help="required for youtube")
     parser.add_argument("--media", help="comma-separated hosted media URLs (from `upload`)")
     parser.add_argument("--schedule", help="RFC3339 UTC time, e.g. 2026-08-01T09:00:00Z")
     parser.add_argument("--language", help="content language hint, e.g. en / zh")
+    parser.add_argument("--brand-id", help="override IMC_PUBLISH_BRAND_ID")
     parser.add_argument(
         "--target",
         action="append",
@@ -290,7 +361,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="imc-publish", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("accounts").set_defaults(fn=cmd_accounts)
+    accounts = sub.add_parser("accounts")
+    accounts.add_argument("--brand-id", help="override IMC_PUBLISH_BRAND_ID")
+    accounts.set_defaults(fn=cmd_accounts)
+
+    sync_accounts = sub.add_parser("sync-accounts")
+    sync_accounts.add_argument("--brand-id", help="override IMC_PUBLISH_BRAND_ID")
+    sync_accounts.set_defaults(fn=cmd_sync_accounts)
 
     upload = sub.add_parser("upload")
     upload.add_argument("file")
