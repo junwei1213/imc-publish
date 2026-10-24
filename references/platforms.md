@@ -16,8 +16,6 @@ it to the user.
 | telegram | caption + explicit target | Must pass a target with the group chat id: `{"platform":"telegram","account_id":"...","platform_data":{"chat_id":"-100123456789"}}`. Telegram publishes immediately (no scheduling) and must be the only platform in its draft. |
 | pinterest | caption + 1 image + **board** | Pass the board as the target's `board_id` (boards are listed by `accounts` like Facebook Pages). |
 | bluesky | caption (≤300) | Text, or 1–4 images. No video. |
-| zalo | caption | Text article; immediate only (no scheduling). |
-| twitter (X) | caption (≤280) | 1–4 images, or 1 video, or 1 GIF. Needs X connected first. |
 
 <!-- PUBLISH-ALL-FORMATS-20261024 -->
 ## Formats and options (`platform_data` on the target)
@@ -45,9 +43,9 @@ A wrong value is rejected at draft time with the key named; unknown keys are ign
   · `OFFER` (`offer` `{"couponCode","redeemOnlineUrl","termsConditions"}`, dates in `event`) · `ALERT` (`alertType`).
   Button: `callToAction` `{"actionType":"BOOK"|"ORDER"|"SHOP"|"LEARN_MORE"|"SIGN_UP"|"CALL","url"}` (`CALL` has no url). Text plus at most 1 image, no video.
 - **pinterest** Options: `title` (≤100), `description` (≤800), `link`, `alt_text`; board as the target's `board_id`.
-- **twitter (X)** Options: `reply_settings`, `made_with_ai`, `paid_partnership`.
 - **First comment** (Instagram, Facebook, YouTube): `--first-comment "…"` on the draft.
 - Not available through the API: TikTok/Threads/YouTube Stories, YouTube Community posts, LinkedIn documents and polls.
+- Not open yet: X and Zalo.
 
 ## Media
 
