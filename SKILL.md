@@ -2,7 +2,7 @@
 name: imc-publish
 slug: imc-publish
 description: Publish posts, images, and videos to your connected social channels (Instagram, TikTok, Facebook, YouTube, LinkedIn, Threads, Google Business, Telegram) through the InstallMyClaw workspace. Use when the user wants to publish, schedule, or check the status of social media content — including videos they just generated with an AI video tool. Triggers: "publish", "post to", "发布", "发帖", "schedule a post", platform names.
-version: 1.0.6
+version: 1.2.2
 author: InstallMyClaw
 license: MIT
 repository: https://github.com/junwei1213/imc-publish
@@ -129,6 +129,11 @@ python3 scripts/imc_publish.py draft \
   pass `--target` with the chosen `account_id`.
 - Platform-specific needs (Telegram chat_id, Facebook non-default Page): see
   `references/platforms.md`.
+- **Every format each platform offers** (Stories, Reels, carousels, Facebook link
+  posts, Google offers/events with a button, TikTok photo mode, Threads polls,
+  YouTube tags, Pinterest boards…) goes in the target's `platform_data` — the full
+  list with key names is in `references/platforms.md` ("Formats and options").
+  `--first-comment` adds a first comment on Instagram, Facebook and YouTube.
 
 ### 4. Show the preview, get confirmation
 

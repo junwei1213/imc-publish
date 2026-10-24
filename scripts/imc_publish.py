@@ -33,7 +33,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-__version__ = "1.2.1"  # IMCPUB-DUPCAP-RETRY-20260924
+__version__ = "1.2.2"  # PUBLISH-ALL-FORMATS-20261024
 
 BASE = os.environ.get("IMC_PUBLISH_BASE", "https://dashboard.installmyclaw.com").rstrip("/")
 SOURCE_TARBALL = "https://codeload.github.com/junwei1213/imc-publish/tar.gz/refs/heads/main"
@@ -329,6 +329,8 @@ def _draft_payload(args) -> dict:
         payload["targets"] = targets
     if getattr(args, "allow_duplicate_caption", False):
         payload["allow_duplicate_caption"] = True
+    if getattr(args, "first_comment", None):
+        payload["first_comment"] = args.first_comment
     return payload
 
 
@@ -379,6 +381,10 @@ def _add_draft_args(parser: argparse.ArgumentParser) -> None:
         "--allow-duplicate-caption",
         action="store_true",
         help="allow a caption another post already uses (e.g. several videos under one caption)",
+    )
+    parser.add_argument(
+        "--first-comment",
+        help="posted as the first comment right after publishing (Instagram, Facebook, YouTube)",
     )
     parser.add_argument(
         "--target",
