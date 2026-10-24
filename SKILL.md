@@ -36,6 +36,11 @@ The client is `scripts/imc_publish.py` (python3, no dependencies). It needs:
   workspace owner). Store it in your shell profile or a secrets manager — never
   write it into files in a repo.
 - `IMC_PUBLISH_BASE` — optional, defaults to `https://dashboard.installmyclaw.com`.
+- `IMC_PUBLISH_BRAND_ID` — required when the workspace has multiple Brands.
+  Set it to the exact Brand this bot is allowed to publish for. For a
+  persistent local binding, store only the non-secret Brand ID in
+  `~/.config/imc-publish/brand_id`. The `--brand-id` option overrides this
+  default for one request.
 
 If the key is missing, stop and ask the user to set it. Never ask the user to
 paste the key into the chat.
@@ -79,8 +84,22 @@ python3 scripts/imc_publish.py accounts
 ```
 
 Shows platform, account name/handle, and Facebook Pages (with the default
-marked). If the platform the user wants isn't listed, tell them to connect it
-in their InstallMyClaw workspace first — you cannot connect accounts from here.
+marked). If the platform is already connected to the selected Brand in the
+Social API account manager but is missing here, synchronize that exact Brand:
+
+```bash
+python3 scripts/imc_publish.py sync-accounts --brand-id BRAND_ID
+```
+
+This imports existing connections only; it never starts OAuth or connects a
+new social account. If the platform still is not listed, tell the user to
+connect it in their InstallMyClaw workspace first.
+The response also shows the resolved `brand_id`. In a multi-Brand workspace,
+stop if it is not the Brand the user asked to publish for.
+
+Client v1.1.2 fails closed when a Brand was requested but the API does not
+return that exact `brand_id`. Do not bypass this check: it means the server has
+not yet deployed Brand-scoped publishing support.
 
 **Read the `publishing_profile` in this response and follow it.** It is the
 workspace's own standing instruction — brand voice, formatting, and
@@ -179,6 +198,20 @@ The typical content pipeline before publishing:
 4. **Publish** — upload the mp4 (step 2) and run the draft → confirm flow.
 
 This skill only handles step 4; steps 1-3 use the user's own tools.
+
+
+## Completion notifications (v1.2.0)
+
+Every bot-created draft must bind the exact incoming source message so results return to the originating chat. Pass `--source-message-ref` from trusted inbound metadata (the exact provider message ID), or `--source-message-id` with the Dashboard message ID. Pass `--source-conversation-id` when needed to disambiguate multiple channel accounts. Never guess IDs, infer the last active chat, or substitute another customer's conversation.
+
+The server verifies tenant, incoming/non-private message, recency, channel, connection and original conversation. It freezes that destination and rechecks it before enqueueing. If trusted source metadata is unavailable, stop and report the missing context; do not silently use dashboard-only mode to make publishing succeed.
+
+`--notification-mode dashboard_only` is available only when the user explicitly chooses no chat notification. Show that choice in the preview. Bots should default to original-chat mode. Existing confirmation rules still apply.
+
+Example fragment to append to a reviewed draft command: `--source-message-ref EXACT_INBOUND_MESSAGE_ID`. This is delivery routing, not authorization to publish.
+
+Status responses distinguish notification state, queue acceptance, transport status and verified delivery. Never call a queued or unknown notification delivered. Completed notifications work independently of customer onboarding. Missing links have a bounded two-minute grace period, then a truthful pending-link message; follow-up links require the original notification to be sent and are checked for up to 24 hours. Unknown delivery never authorizes resending the original message.
+
 
 <!-- IMCPUB-DUPCAP-RETRY-20260924 -->
 ## Several videos, one caption
